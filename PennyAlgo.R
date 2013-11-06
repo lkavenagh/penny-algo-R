@@ -1,5 +1,5 @@
 # Install the quantmod package to get quote data
-install.packages("quantmod")
+#install.packages("quantmod")
 library("quantmod")
 
 # Contants
@@ -29,3 +29,5 @@ universe = universe[universe["price"] < MAX_PRICE,]
 selection <- sample(1:dim(universe)[1],MAX_STOCKS)
 
 universe <- universe[selection,]
+
+print(universe)
