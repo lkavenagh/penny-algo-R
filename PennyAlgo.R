@@ -7,7 +7,7 @@ MAX_STOCKS <- 25
 MAX_PRICE <- 0.05
 FREQ = 60
 
-# Not sure how to change the dir we are working in, is this the best way?
+# Not sure how to access the local csv file, there must be a better way than this...
 setwd("R:\\Documents\\GitHub\\penny-algo-R")
 
 # Read the universe of penny stocks
