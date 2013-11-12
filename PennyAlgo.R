@@ -7,24 +7,28 @@ library("quantmod")
 library("RPostgreSQL")
 
 # Contants
-MAX_STOCKS <- 25
-MAX_PRICE <- 0.05
+MAX_STOCKS = 25
+MAX_PRICE = 0.05
 FREQ = 60
+TICKER_LIST_LOC = "http://www.otcmarkets.com/reports/symbol_info.csv"
 
 # Not sure how to access the local csv file, there must be a better way than this...
 #setwd("R:\\Documents\\GitHub\\penny-algo-R")
-setwd("C:\\Users\\Luke\\Documents\\GitHub\\penny-algo-R")
+#setwd("C:\\Users\\Luke\\Documents\\GitHub\\penny-algo-R")
 
 # Read the universe of penny stocks
 # Need to figure out how/where to just grab this from the www
-universe <- read.csv("PennyList.csv",header=F,col.names="ticker")
+download.file(TICKER_LIST_LOC, "PennyList.csv", "internal")
+universe = read.csv("PennyList.csv",header=T)
+universe = universe[universe$OTC.Tier == "OTC Pink Current",]
+universe = universe[universe$Security.Type == "Common Stock",]
 
 # Connect to DB
 drv=dbDriver("PostgreSQL")
 con=dbConnect(drv, dbname="PennyAlgo", user="postgres", password="pianobookkittenmonster")
 
 # Insert universe into Security table
-for (i in universe$ticker) {
+for (i in universe$Symbol) {
   rs=dbGetQuery(con,paste("SELECT Ticker FROM Security WHERE Ticker = '",i,"'",sep=""))
   if (length(rs)==0) {
     dbSendQuery(con,paste("INSERT INTO Security (Ticker, Active) VALUES ('",i,"',TRUE)",sep=""))
@@ -34,7 +38,7 @@ for (i in universe$ticker) {
 # Mark as inactive if not in file
 rs = dbGetQuery(con, "SELECT Ticker FROM Security");
 
-inactive = rs$ticker[!(rs$ticker %in% universe$ticker)]
+inactive = rs$ticker[!(rs$ticker %in% universe$Symbol)]
 
 for (i in inactive) {
   dbSendQuery(con,paste("UPDATE Security SET Active = FALSE WHERE Ticker = '",i,"'",sep=""))
@@ -42,10 +46,10 @@ for (i in inactive) {
 
 # Get current prices
 universe = dbGetQuery(con,"SELECT Ticker FROM Security WHERE Active = TRUE")
-universe$price <- array(NA,length(universe$ticker))
-for (i in universe$ticker) {
+universe$price <- array(NA,length(universe$Symbol))
+for (i in universe$Symbol) {
   tmp <- getQuote(i)
-  universe$price[universe$ticker==i] <- tmp$Last
+  universe$price[universe$Symbol==i] <- tmp$Last
 }
 
 universe = subset(universe, price < MAX_PRICE)
