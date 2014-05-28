@@ -6,47 +6,53 @@
 library("quantmod")
 library("RPostgreSQL")
 
+base_dir = "C:\\Users\\Luke\\Documents\\GitHub\\penny-algo-R"
+setwd(base_dir)
+
+source("utils.R")
+
 # Contants
 MAX_STOCKS <- 25
-MAX_PRICE <- 0.05
+MAX_PRICE <- 3
+MIN_PRICE <- 1
 FREQ = 60
 
-# Not sure how to access the local csv file, there must be a better way than this...
-#setwd("R:\\Documents\\GitHub\\penny-algo-R")
-setwd("C:\\Users\\Luke\\Documents\\GitHub\\penny-algo-R")
-
 # Read the universe of penny stocks
-# Need to figure out how/where to just grab this from the www
-universe <- read.csv("PennyList.csv",header=F,col.names="ticker")
+universe = downloadStockList(Sys.Date()-1, base_dir)
 
 # Connect to DB
 drv=dbDriver("PostgreSQL")
 con=dbConnect(drv, dbname="PennyAlgo", user="postgres", password="pianobookkittenmonster")
 
 # Insert universe into Security table
-for (i in universe$ticker) {
-  rs=dbGetQuery(con,paste("SELECT Ticker FROM Security WHERE Ticker = '",i,"'",sep=""))
+ptm = proc.time()
+for (i in 1:length(universe)) {
+  if (i%%100 == 0) {
+    print(paste0("Processed ", i ," of ", length(universe), " tickers in current universe"))
+  }
+  rs=dbGetQuery(con,paste0("SELECT Ticker FROM Security WHERE Ticker = '",universe[i],"'"))
   if (length(rs)==0) {
-    dbSendQuery(con,paste("INSERT INTO Security (Ticker, Active) VALUES ('",i,"',TRUE)",sep=""))
+    dbSendQuery(con,paste0("INSERT INTO Security (Ticker, Active) VALUES ('", universe[i],"',TRUE)"))
   }
 }
+print(paste0(round((proc.time() - ptm)['elapsed']/60,1), " minutes."))
 
 # Mark as inactive if not in file
-rs = dbGetQuery(con, "SELECT Ticker FROM Security");
+rs = dbGetQuery(con, "SELECT Ticker FROM Security WHERE Active = TRUE");
 
-inactive = rs$ticker[!(rs$ticker %in% universe$ticker)]
+inactive = rs$ticker[!(rs$ticker %in% universe)]
 
-for (i in inactive) {
-  dbSendQuery(con,paste("UPDATE Security SET Active = FALSE WHERE Ticker = '",i,"'",sep=""))
+for (i in 1:length(inactive)) {
+  if (i%%100 == 0) {
+    print(paste0("Processed ", i ," of ", length(inactive), " tickers that are now inactive"))
+  }
+  dbSendQuery(con,paste0("UPDATE Security SET Active = FALSE WHERE Ticker = '", inactive[i],"'"))
 }
 
-# Get current prices
+ptm = proc.time()
 universe = dbGetQuery(con,"SELECT Ticker FROM Security WHERE Active = TRUE")
-universe$price <- array(NA,length(universe$ticker))
-for (i in universe$ticker) {
-  tmp <- getQuote(i)
-  universe$price[universe$ticker==i] <- tmp$Last
-}
+updatePrices(c(universe$ticker), Sys.Date()-36, Sys.Date()-1)
+print(paste0(round((proc.time() - ptm)['elapsed']/60,1), " minutes."))
 
 universe = subset(universe, price < MAX_PRICE)
 
